@@ -1,0 +1,6 @@
+Recently I've released a Budget containment service that monitors budgets allocated to each account through AWS Budgets defined in the master account, with multiple alerts configured for each budget. The alerts have email notification for 3 - 4 different thresholds. The first 2 of them being warnings, and the third one being an alert that triggers an SCP Deny permission for specific service like bedrock.
+This service has been release in product for 2 accounts. But there are multiple accounts in pre-prod (lower environments) for which the budget containment service has not been release. 
+And incident occurred in pre-prod environment last month.
+However there were other AWS budgets defined (Not related to the budget containment service) with single alert which does not perform any action on the pre-production environment. This alert was triggered on 80% threshold. However the cloud missed this alert and as a result there was no action performed and the team exhausted much more than what they were allowed to use for the month. An this excessive billing was not related to bedrock, it was related to AWS textract service.
+
+I have been assigned the task of performing post mortem on this incident. And figure out a plan to make sure this kind of incident does not occur again.
