@@ -44,3 +44,38 @@ index="app_am_main" eventSource="*bedrock*"
         distinctUsers
         userIdentities
         modelsUsed
+
+=================
+Newer based on token fields
+
+index="app_am_2703_main" eventSource="*bedrock*"
+    (eventName="InvokeModel" OR eventName="InvokeModelWithResponseStream" OR eventName="Converse" OR eventName="ConverseStream")
+
+| eval inputTokens  = coalesce('additionalEventData.inputTokens', 0)
+| eval outputTokens = coalesce('additionalEventData.outputTokens', 0)
+| eval totalTokens  = inputTokens + outputTokens
+
+| eval userIdentity = coalesce(
+    'userIdentity.arn',
+    'userIdentity.sessionContext.sessionIssuer.arn',
+    'userIdentity.userName',
+    'userIdentity.principalId'
+  )
+
+| eval modelId = coalesce('requestParameters.modelId', "unknown")
+
+| stats
+    count                    AS invocationCount,
+    sum(inputTokens)         AS totalInputTokens,
+    sum(outputTokens)        AS totalOutputTokens,
+    sum(totalTokens)         AS totalTokens,
+    dc(userIdentity)         AS distinctUsers,
+    values(userIdentity)     AS userIdentities,
+    values(modelId)          AS modelsUsed
+  BY recipientAccountId
+
+| sort - totalTokens
+| eval totalTokens      = tostring(totalTokens,      "commas")
+| eval totalInputTokens = tostring(totalInputTokens,  "commas")
+| eval totalOutputTokens= tostring(totalOutputTokens, "commas")
+| table recipientAccountId invocationCount totalInputTokens totalOutputTokens totalTokens distinctUsers userIdentities modelsUsed
