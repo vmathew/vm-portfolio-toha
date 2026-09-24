@@ -1,0 +1,34 @@
+Prompt:
+
+You are helping me build an internal tool at a large bank. I need a solution design and working code for the following task.
+
+Context:
+
+We run a large AWS Organization with many accounts across multiple OUs.
+Access to Amazon Bedrock foundation models is governed by SCPs: we allow or deny specific model IDs (e.g., via resource ARNs like arn:aws:bedrock:*::foundation-model/<model-id> or inference-profile ARNs) in SCP statements covering actions such as bedrock:InvokeModel*, bedrock:Converse*, and bedrock:CreateModelInvocationJob.
+I have been tasked with producing a recurring report that collates, per account/OU: (1) all Bedrock models currently accessible, (2) models newly granted access since the last report, (3) models whose access was removed at the SCP level, and (4) models decommissioned or marked legacy by AWS itself.
+The report runs quarterly by default but must be switchable to monthly via configuration only (no code change).
+
+Design constraints:
+
+Do not assume access to the org management account. Assume a delegated-administrator account (or a security/audit account with a read-only cross-account role) for organizations:ListPolicies, DescribePolicy, ListTargetsForPolicy, ListOrganizationalUnitsForParent, ListAccounts, etc.
+Resolve the effective SCP set per account by walking root → OU chain → account: effective permissions are the intersection of allows at every level, minus explicit denies at any level.
+SCPs often use wildcards (e.g., anthropic.claude-*). Expand wildcards against the live Bedrock catalog (bedrock:ListFoundationModels, per region) on every run — never store the expanded list from a pattern — so that a new AWS model matching an existing wildcard is correctly reported as "newly accessible."
+Detect AWS-side decommissioning via modelLifecycle.status (ACTIVE vs LEGACY) and via models disappearing from the catalog between runs.
+Persist each run as a JSON snapshot in S3, keyed by account × region × modelId, recording how access is derived (which SCP/statement matched, catalog status). Diff against the previous snapshot to produce the four buckets above.
+Keep raw API responses (SCP documents, catalog listings) in S3 with versioning/object lock as audit evidence so every report is reproducible.
+Also pull CloudTrail events for AttachPolicy, DetachPolicy, UpdatePolicy within the reporting window, so grant-then-revoke churn inside a period is visible even if the endpoint snapshots look unchanged.
+Scheduling: EventBridge Scheduler → Lambda (or Step Functions if fan-out across accounts/regions warrants it). The cron expression must be an input parameter/config value, defaulting to quarterly (cron(0 12 1 1,4,7,10 ? *)), switchable to monthly.
+Output: an XLSX report with tabs for each of the four buckets plus an access matrix (OU/account rows × model columns), written to S3.
+AWS-native services and boto3 only; no third-party SaaS dependencies. Least-privilege IAM policies for every role involved.
+
+Deliverables I want from you:
+
+A short architecture description (components, data flow, IAM roles and their policies).
+The Python/boto3 code: SCP retrieval and effective-policy resolution with inheritance, wildcard expansion against the catalog, snapshot + diff logic, CloudTrail reconciliation, and XLSX generation.
+The Lambda/Step Functions wiring and the EventBridge Scheduler definition with the cadence as a parameter.
+A note on edge cases: explicit denies overriding allows, condition keys (e.g., bedrock:InferenceProfileArn), region differences in the catalog, and accounts attached to multiple OUs' inherited policies.
+
+Ask me clarifying questions about our org structure or naming conventions before generating code if anything is ambiguous.
+
+One thing to check before you paste it: this describes internal SCP governance structure, so make sure the model you're using at work is your bank-approved one, not a public consumer tool.
